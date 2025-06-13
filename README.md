@@ -1,64 +1,75 @@
-Example plain HTML site using GitLab Pages.
+# fosseam-explorer-template
 
-Learn more about GitLab Pages at https://pages.gitlab.io and the official
-documentation https://docs.gitlab.com/ce/user/project/pages/.
+Lightweight, single-file HTML/CSS/JS scaffolder template for interactive JSON exploration.
 
----
+## Overview
 
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+– Load JSON via file upload or URL
+– Display modes: Raw text and Tree view
+– Sticky transparent header with menu and theme switch (light/dark)
+– Clickable values open a centered tooltip window
+– Built-in Export: JSON and Markdown (CSV planned)
 
-- [GitLab CI](#gitlab-ci)
-- [GitLab User or Group Pages](#gitlab-user-or-group-pages)
-- [Did you fork this project?](#did-you-fork-this-project)
-- [Troubleshooting](#troubleshooting)
+## Quick Start
 
-<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+1. Clone or fork:
 
-## GitLab CI
+   ```bash
+   git clone https://gitlab.com/fosseam/fosseam-explorer-template.git
+   ```
+2. Serve `index.html` on any static host or open directly in browser
+3. Use the menu (☰) to import JSON
 
-This project's static Pages are built by [GitLab CI][ci], following the steps
-defined in [`.gitlab-ci.yml`](.gitlab-ci.yml):
+## Features
 
+### Import
+
+– Per file: Upload local `.json`
+– Per URL: Fetch remote JSON
+
+### View
+
+– **Raw**: Pretty-printed JSON
+– **Tree**: Interactive collapsible structure
+
+* Expand objects and arrays
+* Empty arrays/objects shown as leaf with Null icon
+* Click value to show full content in tooltip
+
+### Export
+
+– Download JSON or Markdown
+– CSV export placeholder
+
+### Theme
+
+– Light and dark modes
+– Remember user preference in localStorage
+
+## Configuration
+
+Inline in `index.html`:
+
+```js
+window.FOSSEAM_CONFIG = {
+  title: "fosseam-explorer-template",
+  mode: "auto",
+  fieldMap: {},
+  autoload: false
+};
 ```
-image: busybox
 
-pages:
-  stage: deploy
-  script:
-  - echo 'Nothing to do...'
-  artifacts:
-    paths:
-    - public
-    expire_in: 1 day
-  rules:
-    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
-```
+Adjust fields or autoload behavior as needed.
 
-The above example expects to put all your HTML files in the `public/` directory.
+## Contributing
 
-## GitLab User or Group Pages
+1. Create an issue
+2. Fork the repo
+3. Create a feature branch
+4. Submit a Merge Request
 
-To use this project as your user/group website, you will need one additional
-step: just rename your project to `namespace.gitlab.io`, where `namespace` is
-your `username` or `groupname`. This can be done by navigating to your
-project's **Settings**.
+## License
 
-Read more about [user/group Pages][userpages] and [project Pages][projpages].
+Licensed under the Apache License, Version 2.0 © 2025 fosseam.org
 
-## Did you fork this project?
-
-If you forked this project for your own use, please go to your project's
-**Settings** and remove the forking relationship, which won't be necessary
-unless you want to contribute back to the upstream project.
-
-## Troubleshooting
-
-1. CSS is missing! That means that you have wrongly set up the CSS URL in your
-   HTML files. Have a look at the [index.html] for an example.
-
-[ci]: https://about.gitlab.com/gitlab-ci/
-[index.html]: https://gitlab.com/pages/plain-html/blob/master/public/index.html
-[userpages]: https://docs.gitlab.com/ce/user/project/pages/introduction.html#user-or-group-pages
-[projpages]: https://docs.gitlab.com/ce/user/project/pages/introduction.html#project-pages
+Full text available at [https://www.apache.org/licenses/LICENSE-2.0](https://www.apache.org/licenses/LICENSE-2.0).
