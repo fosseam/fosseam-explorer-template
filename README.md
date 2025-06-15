@@ -1,6 +1,7 @@
 # fosseam-explorer-template
 
 Lightweight, single-file HTML/CSS/JS scaffolder template for interactive JSON exploration.
+Synced gl to gh.
 
 ## Overview
 
