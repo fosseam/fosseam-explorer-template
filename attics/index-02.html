@@ -188,8 +188,7 @@
       const header = document.createElement('div'); header.className = 'node-content';
 
       const expandIcon = document.createElement('span'); expandIcon.className = 'expand-icon';
-      // Default symbols
-      let expandSymbol = isNode ? '▶️' : '⏺️';
+      expandIcon.textContent = isNode ? '▶️' : '⏺️';
       let type;
       if (isEmptyArray) type = 'array';
       else if (isEmptyObject) type = 'object';
@@ -198,14 +197,7 @@
       else if (isObject) type = 'object';
       else type = typeof value;
       const typeIcon = document.createElement('span'); typeIcon.className = 'type-icon';
-      let typeSymbol = iconMap[type] || '';
-      // Override for Source node
-      if (key === 'Source') {
-        expandSymbol = '🔣';
-        typeSymbol = '🟢';
-      }
-      expandIcon.textContent = expandSymbol;
-      typeIcon.textContent = typeSymbol;
+      typeIcon.textContent = iconMap[type] || '';
 
       const labelSpan = document.createElement('span'); labelSpan.className = 'label';
       labelSpan.textContent = key != null ? key : '';
@@ -234,8 +226,8 @@
       const container = document.getElementById('structure-view'); container.innerHTML = '';
       const stats = countJson(data);
       const countObj = {
-        'total-Nodes': stats.totalNodes,
-        'total-Leaves': stats.leaves,
+        'Total Nodes': stats.totalNodes,
+        'Total Leaves': stats.leaves,
         'Objects': stats.objects,
         'Arrays': stats.arrays,
         'Strings': stats.strings,
@@ -248,10 +240,7 @@
         'Size': formatBytes(currentFile.size),
         'Modified': new Date(currentFile.lastModified).toLocaleString()
       };
-      const wrapper = {
-        'Source': Object.assign({}, fileObj, { 'Count': countObj }),
-        'JSON-Content': data
-      };
+      const wrapper = { 'File Info': fileObj, 'Countings': countObj, 'Root': data };
 
       const rootUl = document.createElement('ul'); rootUl.className = 'tree-list';
       Object.entries(wrapper).forEach(([k,v]) => rootUl.append(createTreeItem(k, v)));
