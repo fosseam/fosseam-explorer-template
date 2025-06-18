@@ -59,6 +59,7 @@
       white-space: pre-wrap; font-family: monospace;
       height: 100%;
     }
+    /* KORREKTUR: Standard-Cursor für den Graphen setzen */
     #cyto-view { white-space: normal; cursor: grab; }
     #cyto-view.grabbing { cursor: grabbing; }
     html[data-bs-theme="light"] .label { color: #0052cc; }
@@ -197,12 +198,7 @@
     const searchInValues = document.getElementById('search-in-values');
     const searchResultsCount = document.getElementById('search-results-count');
 
-    function setTheme(mode) { 
-      htmlEl.setAttribute('data-bs-theme', mode); 
-      localStorage.setItem('theme', mode); 
-      // KORREKTUR: Theme an Cytoscape weitergeben
-      if (cyInstance) applyCytoTheme();
-    }
+    function setTheme(mode) { htmlEl.setAttribute('data-bs-theme', mode); localStorage.setItem('theme', mode); }
     document.getElementById('themeToggle').addEventListener('click', () => { setTheme(htmlEl.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark'); });
     if (localStorage.getItem('theme')) setTheme(localStorage.getItem('theme'));
     function clearActiveViews() { ['view-raw','view-tree','view-cyto','view-document'].forEach(id => document.getElementById(id)?.classList.remove('active')); }
@@ -442,8 +438,10 @@
     });
 
     function getValueFromPath(path) {
+        // Start an der Wurzel, da die ersten Knoten ('Source', 'Content') keine Punkte haben
         if (path === 'Source') return cytoDataWrapper.Source;
         if (path === 'Content') return cytoDataWrapper.Content;
+
         const keys = path.replace(/\[(\d+)\]/g, '.$1').split('.');
         let result = cytoDataWrapper;
         for (const key of keys) {
@@ -451,13 +449,6 @@
             result = result[key];
         }
         return result;
-    }
-
-    // KORREKTUR: Neue Funktion, die das Theme für Cytoscape anwendet
-    function applyCytoTheme() {
-        if (!cyInstance) return;
-        const isDark = htmlEl.getAttribute('data-bs-theme') === 'dark';
-        cyInstance.nodes().style('color', isDark ? '#ffffff' : '#000000');
     }
 
     function renderCytoView() {
@@ -468,18 +459,15 @@
 
         cyInstance = cytoscape({
             container: cytoView,
+            // KORREKTUR: Veraltete und ungültige Styles entfernt
             style: [
-                // KORREKTUR: Schriftart, Textausrichtung und neue Stile
-                { selector: 'node', style: { 'label': 'data(label)', 'font-size': '11px', 'text-valign': 'center', 'text-halign': 'center', 'background-color': '#ccc', 'padding': '6px', 'shape': 'round-rectangle', 'border-width': 1, 'border-color': '#888', 'font-family': "'Fira Sans Condensed', sans-serif" } },
+                { selector: 'node', style: { 'label': 'data(label)', 'font-size': '10px', 'text-valign': 'center', 'text-halign': 'center', 'background-color': '#ccc', 'color': '#000', 'padding': '5px', 'shape': 'round-rectangle', 'border-width': 1, 'border-color': '#888' } },
                 { selector: 'edge', style: { 'width': 1, 'line-color': '#ccc', 'target-arrow-color': '#ccc', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier' } },
                 { selector: '.root-node', style: { 'background-color': '#fff', 'background-opacity': 0, 'border-width': 0, 'font-size': '32px', 'width': '40px', 'height': '40px' } },
                 { selector: '.branch-node', style: { 'background-color': '#a0c4ff', 'font-weight': 'bold' } },
                 { selector: '.key-node', style: { 'background-color': '#fdffb6' } },
                 { selector: '.leaf-node', style: { 'background-color': '#caffbf', 'shape': 'ellipse' } },
                 { selector: '.expanded', style: { 'border-width': 2, 'border-color': 'black', 'border-style': 'dashed' } },
-                { selector: '.more-node', style: { 'background-color': '#e9ecef', 'shape': 'round-tag', 'font-style': 'italic' } },
-                { selector: '.source-side', style: { 'text-halign': 'right', 'text-margin-x': -8 } },
-                { selector: '.content-side', style: { 'text-halign': 'left', 'text-margin-x': 8 } },
             ],
             layout: { name: 'preset' },
             userZoomingEnabled: true,
@@ -488,8 +476,8 @@
 
         const initialNodes = [
             { group: 'nodes', data: { id: 'cyto-root', label: '👁️' }, classes: 'root-node', position: { x: 200, y: 200 } },
-            { group: 'nodes', data: { id: 'Source', label: 'Source', hasChildren: true }, classes: 'branch-node source-side', position: { x: 50, y: 200 } },
-            { group: 'nodes', data: { id: 'Content', label: 'Content', hasChildren: true }, classes: 'branch-node content-side', position: { x: 350, y: 200 } },
+            { group: 'nodes', data: { id: 'Source', label: 'Source', hasChildren: true, isExpanded: false }, classes: 'branch-node', position: { x: 50, y: 200 } },
+            { group: 'nodes', data: { id: 'Content', label: 'Content', hasChildren: true, isExpanded: false }, classes: 'branch-node', position: { x: 350, y: 200 } },
             { group: 'edges', data: { source: 'cyto-root', target: 'Source' } },
             { group: 'edges', data: { source: 'cyto-root', target: 'Content' } }
         ];
@@ -497,101 +485,68 @@
         cyInstance.add(initialNodes);
         
         cyInstance.ready(() => {
-            applyCytoTheme(); // Theme initial anwenden
             cyInstance.center();
             cyInstance.zoom(1.5);
         });
 
-        // KORREKTUR: Logik in eine eigene Funktion ausgelagert
-        const expandPage = (parentNode) => {
-            const nodeId = parentNode.id();
-            const childrenData = getValueFromPath(nodeId);
-            if (!childrenData || typeof childrenData !== 'object') return;
-
-            const childrenEntries = Object.entries(childrenData);
-            if (childrenEntries.length === 0) return;
-            
-            const page = parentNode.data('page') || 0;
-            const itemsPerPage = 5;
-            const start = page * itemsPerPage;
-            const end = start + itemsPerPage;
-            
-            const pageEntries = childrenEntries.slice(start, end);
-            const newElements = [];
-            const parentPos = parentNode.position();
-            const direction = nodeId.startsWith('Source') ? -1 : 1;
-            const sideClass = direction === -1 ? 'source-side' : 'content-side';
-            const horizontalDist = 120;
-            const verticalSpacing = 40;
-
-            pageEntries.forEach(([key, value], index) => {
-                const displayKey = Array.isArray(childrenData) ? `[${key}]` : key;
-                const childPath = Array.isArray(childrenData) ? `${nodeId}[${start + index}]` : `${nodeId}.${key}`;
-                const isNode = value !== null && typeof value === 'object';
-                const hasChildren = isNode && Object.keys(value).length > 0;
-                
-                const yOffset = (index - (pageEntries.length - 1) / 2) * verticalSpacing;
-                const childPos = { x: parentPos.x + (horizontalDist * direction), y: parentPos.y + yOffset };
-                
-                let nodeData = { id: childPath };
-                let nodeClasses = sideClass;
-
-                if (isNode) {
-                    nodeData.label = displayKey;
-                    nodeData.hasChildren = hasChildren;
-                    nodeClasses += ' key-node';
-                } else {
-                    let label = String(value);
-                    if (label.length > 40) label = label.substring(0, 37) + '...';
-                    nodeData.label = `${displayKey}: ${label}`;
-                    nodeData.fullValue = String(value);
-                    nodeData.hasChildren = false;
-                    nodeClasses += ' leaf-node';
-                }
-                newElements.push({ group: 'nodes', data: nodeData, classes: nodeClasses, position: childPos });
-                newElements.push({ group: 'edges', data: { source: nodeId, target: childPath } });
-            });
-
-            // "More"-Button hinzufügen, wenn nötig
-            if (end < childrenEntries.length) {
-                const lastChildPos = newElements[newElements.length - 2].position; // Position des letzten echten Knotens
-                const moreNodePos = { x: lastChildPos.x, y: lastChildPos.y + verticalSpacing };
-                newElements.push({
-                    group: 'nodes',
-                    data: { id: `more-${nodeId}-${page}`, label: `[ ... mehr ]`, parentId: nodeId },
-                    classes: `more-node ${sideClass}`,
-                    position: moreNodePos
-                });
-            }
-
-            if (newElements.length > 0) {
-                cyInstance.add(newElements);
-                applyCytoTheme(); // Theme auf neue Knoten anwenden
-                parentNode.data('page', page + 1); // Seitenzahl für nächsten Klick erhöhen
-                parentNode.data('isExpanded', true).addClass('expanded');
-                cyInstance.animate({ fit: { eles: cyInstance.elements(), padding: 50 }, duration: 1000 });
-            }
-        };
-
         cyInstance.on('tap', 'node[?hasChildren]', (evt) => {
             const node = evt.target;
+            const nodeId = node.id();
+
             if (node.data('isExpanded')) {
-                // Nur die direkten Kinder entfernen, die von diesem Knoten ausgehen
-                const childrenToRemove = node.outgoers().nodes();
-                cyInstance.remove(childrenToRemove);
-                node.data('isExpanded', false).removeClass('expanded');
-                node.data('page', 0); // Paginierung zurücksetzen
+                cyInstance.remove(node.successors());
+                node.data('isExpanded', false);
+                node.removeClass('expanded');
             } else {
-                expandPage(node);
+                const childrenData = getValueFromPath(nodeId);
+                if (!childrenData || typeof childrenData !== 'object') return;
+
+                const childrenEntries = Object.entries(childrenData);
+                if (childrenEntries.length === 0) return;
+
+                const newElements = [];
+                const parentPos = node.position();
+                const direction = nodeId.startsWith('Source') ? -1 : 1;
+                const horizontalDist = 120;
+                const verticalSpacing = 35;
+                
+                childrenEntries.forEach(([key, value], index) => {
+                    const displayKey = Array.isArray(childrenData) ? `[${key}]` : key;
+                    const childPath = `${nodeId}.${key}`;
+                    const isNode = value !== null && typeof value === 'object';
+                    const hasChildren = isNode && Object.keys(value).length > 0;
+
+                    const yOffset = (index - (childrenEntries.length - 1) / 2) * verticalSpacing;
+                    const childPos = { x: parentPos.x + (horizontalDist * direction), y: parentPos.y + yOffset };
+
+                    let nodeData = { id: childPath, isExpanded: false };
+                    let nodeClasses = '';
+
+                    if (isNode) {
+                        nodeData.label = displayKey;
+                        nodeData.hasChildren = hasChildren;
+                        nodeClasses = 'key-node';
+                    } else {
+                        let label = String(value);
+                        if (label.length > 40) label = label.substring(0, 37) + '...';
+                        nodeData.label = `${displayKey}: ${label}`;
+                        nodeData.fullValue = String(value);
+                        nodeData.hasChildren = false;
+                        nodeClasses = 'leaf-node';
+                    }
+                    
+                    newElements.push({ group: 'nodes', data: nodeData, classes: nodeClasses, position: childPos });
+                    newElements.push({ group: 'edges', data: { source: nodeId, target: childPath } });
+                });
+
+                if (newElements.length > 0) {
+                    cyInstance.add(newElements);
+                    node.data('isExpanded', true);
+                    node.addClass('expanded');
+                    
+                    cyInstance.animate({ fit: { eles: cyInstance.elements(), padding: 50 }, duration: 1000 });
+                }
             }
-        });
-        
-        // Eigener Handler für "More"-Knoten
-        cyInstance.on('tap', 'node.more-node', (evt) => {
-            const moreNode = evt.target;
-            const parentNode = cyInstance.getElementById(moreNode.data('parentId'));
-            moreNode.remove();
-            expandPage(parentNode); // Nächste Seite laden
         });
 
         cyInstance.on('tap', 'node[!hasChildren]', (evt) => {
@@ -602,9 +557,11 @@
             }
         });
         
+        // KORREKTUR: Event-Handler für den Cursor
         cyInstance.on('mouseover', 'node', (e) => {
             const node = e.target;
-            if (node.data('hasChildren') || node.data('fullValue') || node.hasClass('more-node')) {
+            // Nur für klickbare Knoten den Cursor ändern
+            if (node.data('hasChildren') || node.data('fullValue')) {
                 cytoView.style.cursor = 'pointer';
             }
         });

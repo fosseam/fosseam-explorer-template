@@ -15,8 +15,6 @@
   </script>
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
-
   <style>
     body { margin: 0; font-family: 'Fira Sans Condensed', sans-serif; }
     .header-bar {
@@ -39,6 +37,7 @@
     #search-container { margin-top: 0.5rem; }
     #breadcrumb-container {
       margin-top: 0.5rem; padding-top: 0.5rem;
+      /* CHANGE: Padding increased for better visual alignment */
       padding-left: 8.2rem;
       border-top: 1px solid rgba(128, 128, 128, 0.2);
       font-size: 0.85em; white-space: nowrap; overflow-x: auto;
@@ -54,13 +53,7 @@
       height: calc(100vh - 7rem);
       overflow-y: auto;
     }
-    #main-view-container { height: 100%; }
-    #raw-view, #structure-view, #cyto-view {
-      white-space: pre-wrap; font-family: monospace;
-      height: 100%;
-    }
-    #cyto-view { white-space: normal; cursor: grab; }
-    #cyto-view.grabbing { cursor: grabbing; }
+    #raw-view, #structure-view { white-space: pre-wrap; font-family: monospace; }
     html[data-bs-theme="light"] .label { color: #0052cc; }
     html[data-bs-theme="dark"] .label  { color: #ffa500; }
     .tree-list { list-style: none; padding: 0; margin: 0; }
@@ -100,6 +93,7 @@
       display: inline-block;
       vertical-align: middle;
     }
+    /* CHANGE: CSS for Submenu functionality */
     .dropdown-submenu { position: relative; }
     .dropdown-submenu > .dropdown-item::after {
       content: '›';
@@ -127,16 +121,17 @@
             <li class="dropdown-header">Öffnen</li>
             <li><a class="dropdown-item" href="#" id="import-file">Per Datei laden…</a></li>
             <li><a class="dropdown-item" href="#" id="import-url">Per URL laden…</a></li>
+            <!-- CHANGE: Submenu structure for "Last Viewed" -->
             <li class="dropdown-submenu d-none" id="last-viewed-container">
               <a class="dropdown-item" href="#">Zuletzt geöffnet</a>
               <ul class="dropdown-menu" id="last-viewed-list">
+                <!-- Recent items will be injected here by JS -->
               </ul>
             </li>
             <li><hr class="dropdown-divider"></li>
             <li class="dropdown-header">View</li>
             <li><a class="dropdown-item" href="#" id="view-raw">Raw-View</a></li>
             <li><a class="dropdown-item active" href="#" id="view-tree">Tree-View</a></li>
-            <li><a class="dropdown-item" href="#" id="view-cyto">Cyto-View</a></li>
             <li><a class="dropdown-item disabled" href="#" id="view-document">Document</a></li>
             <li><hr class="dropdown-divider"></li>
             <li class="dropdown-header">Export</li>
@@ -168,11 +163,10 @@
   </div>
 
   <div class="container-scroll">
-    <div class="container py-4" id="main-view-container">
+    <div class="container py-4">
       <div id="main-alert" class="alert alert-warning">Bitte JSON-Datei oder URL laden</div>
       <div id="raw-view" class="d-none"></div>
       <div id="structure-view" class="d-none"></div>
-      <div id="cyto-view" class="d-none"></div>
     </div>
   </div>
 
@@ -182,10 +176,6 @@
   <script>
     const htmlEl = document.documentElement;
     let jsonData = null, currentFile = null;
-    let cyInstance = null;
-    let cytoDataWrapper = {}; 
-    const cytoView = document.getElementById('cyto-view');
-
     const tooltip = document.getElementById('jsonTooltip');
     const toggleAllBtn = document.getElementById('toggle-all-btn');
     const breadcrumbContainer = document.getElementById('breadcrumb-container');
@@ -197,15 +187,10 @@
     const searchInValues = document.getElementById('search-in-values');
     const searchResultsCount = document.getElementById('search-results-count');
 
-    function setTheme(mode) { 
-      htmlEl.setAttribute('data-bs-theme', mode); 
-      localStorage.setItem('theme', mode); 
-      // KORREKTUR: Theme an Cytoscape weitergeben
-      if (cyInstance) applyCytoTheme();
-    }
+    function setTheme(mode) { htmlEl.setAttribute('data-bs-theme', mode); localStorage.setItem('theme', mode); }
     document.getElementById('themeToggle').addEventListener('click', () => { setTheme(htmlEl.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark'); });
     if (localStorage.getItem('theme')) setTheme(localStorage.getItem('theme'));
-    function clearActiveViews() { ['view-raw','view-tree','view-cyto','view-document'].forEach(id => document.getElementById(id)?.classList.remove('active')); }
+    function clearActiveViews() { ['view-raw','view-tree','view-document'].forEach(id => document.getElementById(id)?.classList.remove('active')); }
     const iconMap = { object: '📂', array: '📁', string: '🆎', number: '🔢', boolean: '☑️', null: '⛔' };
     function showTooltip(evt, text) { tooltip.textContent = text; tooltip.style.display = 'block'; }
     function hideTooltip() { tooltip.style.display = 'none'; }
@@ -325,7 +310,7 @@
 
     function renderTree(data) {
       structureView.innerHTML = '';
-      const stats = countJson(JSON.parse(JSON.stringify(data)));
+      const stats = countJson(data);
       const wrapper = { 'Source': {}, 'Content': data };
       const countObj = {'Nodes':stats.totalNodes, 'Leaves':stats.leaves, 'Objects':stats.objects, 'Arrays':stats.arrays, 'Strings':stats.strings, 'Numbers':stats.numbers, 'Booleans':stats.booleans, 'Nulls':stats.nulls };
       Object.assign(wrapper.Source, {Name:currentFile.name, Size:formatBytes(currentFile.size), Modified:new Date(currentFile.lastModified).toLocaleString(), Count: countObj});
@@ -348,7 +333,7 @@
     function renderRecentItems() {
         const container = document.getElementById('last-viewed-container');
         const list = document.getElementById('last-viewed-list');
-        list.innerHTML = ''; 
+        list.innerHTML = ''; // Clear old items from submenu
 
         const recents = JSON.parse(localStorage.getItem('fosseam-recent-files') || '[]');
         container.classList.toggle('d-none', recents.length === 0);
@@ -384,15 +369,10 @@
     function loadJson(txt, file, itemToSave = null) {
       try {
         jsonData = JSON.parse(txt); currentFile = file;
-        const stats = countJson(JSON.parse(txt));
-        cytoDataWrapper = { 'Source': {}, 'Content': jsonData };
-        const countObj = {'Nodes':stats.totalNodes, 'Leaves':stats.leaves, 'Objects':stats.objects, 'Arrays':stats.arrays, 'Strings':stats.strings, 'Numbers':stats.numbers, 'Booleans':stats.booleans, 'Nulls':stats.nulls };
-        Object.assign(cytoDataWrapper.Source, {Name:currentFile.name, Size:formatBytes(currentFile.size), Modified:new Date(currentFile.lastModified).toLocaleString(), Count: countObj});
-
         if(itemToSave) saveRecentItem(itemToSave);
 
         document.getElementById('main-alert').classList.add('d-none');
-        rawView.classList.add('d-none'); structureView.classList.add('d-none'); cytoView.classList.add('d-none');
+        rawView.classList.add('d-none'); structureView.classList.add('d-none');
         toggleAllBtn.classList.remove('d-none'); toggleAllBtn.textContent = '▶️';
         updateBreadcrumb(null);
         searchContainer.classList.remove('d-none');
@@ -407,8 +387,7 @@
     document.getElementById('view-raw').addEventListener('click', () => {
       if (!jsonData) return;
       clearActiveViews(); document.getElementById('view-raw').classList.add('active');
-      structureView.classList.add('d-none'); cytoView.classList.add('d-none');
-      toggleAllBtn.classList.add('d-none');
+      structureView.classList.add('d-none');
       updateBreadcrumb(null);
       searchContainer.classList.add('d-none');
       hideTooltip();
@@ -418,202 +397,15 @@
     
     document.getElementById('view-tree').addEventListener('click', () => {
       if (!jsonData) return;
-      clearActiveViews(); document.getElementById('view-tree').classList.add('active');
+      clearActiveViews();
+      document.getElementById('view-tree').classList.add('active');
       rawView.classList.add('d-none');
-      cytoView.classList.add('d-none');
-      toggleAllBtn.classList.remove('d-none');
-      searchContainer.classList.remove('d-none');
+      if (searchContainer) searchContainer.classList.remove('d-none');
       structureView.classList.remove('d-none');
       renderTree(jsonData);
       performSearch(searchInput.value);
       hideTooltip();
     });
-
-    document.getElementById('view-cyto').addEventListener('click', () => {
-        if (!jsonData) return;
-        clearActiveViews(); document.getElementById('view-cyto').classList.add('active');
-        rawView.classList.add('d-none'); structureView.classList.add('d-none');
-        toggleAllBtn.classList.add('d-none');
-        searchContainer.classList.add('d-none');
-        breadcrumbContainer.style.visibility = 'hidden';
-        cytoView.classList.remove('d-none');
-        renderCytoView();
-        hideTooltip();
-    });
-
-    function getValueFromPath(path) {
-        if (path === 'Source') return cytoDataWrapper.Source;
-        if (path === 'Content') return cytoDataWrapper.Content;
-        const keys = path.replace(/\[(\d+)\]/g, '.$1').split('.');
-        let result = cytoDataWrapper;
-        for (const key of keys) {
-            if (result === null || typeof result !== 'object') return undefined;
-            result = result[key];
-        }
-        return result;
-    }
-
-    // KORREKTUR: Neue Funktion, die das Theme für Cytoscape anwendet
-    function applyCytoTheme() {
-        if (!cyInstance) return;
-        const isDark = htmlEl.getAttribute('data-bs-theme') === 'dark';
-        cyInstance.nodes().style('color', isDark ? '#ffffff' : '#000000');
-    }
-
-    function renderCytoView() {
-        if (cyInstance) {
-            cyInstance.destroy();
-            cyInstance = null;
-        }
-
-        cyInstance = cytoscape({
-            container: cytoView,
-            style: [
-                // KORREKTUR: Schriftart, Textausrichtung und neue Stile
-                { selector: 'node', style: { 'label': 'data(label)', 'font-size': '11px', 'text-valign': 'center', 'text-halign': 'center', 'background-color': '#ccc', 'padding': '6px', 'shape': 'round-rectangle', 'border-width': 1, 'border-color': '#888', 'font-family': "'Fira Sans Condensed', sans-serif" } },
-                { selector: 'edge', style: { 'width': 1, 'line-color': '#ccc', 'target-arrow-color': '#ccc', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier' } },
-                { selector: '.root-node', style: { 'background-color': '#fff', 'background-opacity': 0, 'border-width': 0, 'font-size': '32px', 'width': '40px', 'height': '40px' } },
-                { selector: '.branch-node', style: { 'background-color': '#a0c4ff', 'font-weight': 'bold' } },
-                { selector: '.key-node', style: { 'background-color': '#fdffb6' } },
-                { selector: '.leaf-node', style: { 'background-color': '#caffbf', 'shape': 'ellipse' } },
-                { selector: '.expanded', style: { 'border-width': 2, 'border-color': 'black', 'border-style': 'dashed' } },
-                { selector: '.more-node', style: { 'background-color': '#e9ecef', 'shape': 'round-tag', 'font-style': 'italic' } },
-                { selector: '.source-side', style: { 'text-halign': 'right', 'text-margin-x': -8 } },
-                { selector: '.content-side', style: { 'text-halign': 'left', 'text-margin-x': 8 } },
-            ],
-            layout: { name: 'preset' },
-            userZoomingEnabled: true,
-            userPanningEnabled: true
-        });
-
-        const initialNodes = [
-            { group: 'nodes', data: { id: 'cyto-root', label: '👁️' }, classes: 'root-node', position: { x: 200, y: 200 } },
-            { group: 'nodes', data: { id: 'Source', label: 'Source', hasChildren: true }, classes: 'branch-node source-side', position: { x: 50, y: 200 } },
-            { group: 'nodes', data: { id: 'Content', label: 'Content', hasChildren: true }, classes: 'branch-node content-side', position: { x: 350, y: 200 } },
-            { group: 'edges', data: { source: 'cyto-root', target: 'Source' } },
-            { group: 'edges', data: { source: 'cyto-root', target: 'Content' } }
-        ];
-
-        cyInstance.add(initialNodes);
-        
-        cyInstance.ready(() => {
-            applyCytoTheme(); // Theme initial anwenden
-            cyInstance.center();
-            cyInstance.zoom(1.5);
-        });
-
-        // KORREKTUR: Logik in eine eigene Funktion ausgelagert
-        const expandPage = (parentNode) => {
-            const nodeId = parentNode.id();
-            const childrenData = getValueFromPath(nodeId);
-            if (!childrenData || typeof childrenData !== 'object') return;
-
-            const childrenEntries = Object.entries(childrenData);
-            if (childrenEntries.length === 0) return;
-            
-            const page = parentNode.data('page') || 0;
-            const itemsPerPage = 5;
-            const start = page * itemsPerPage;
-            const end = start + itemsPerPage;
-            
-            const pageEntries = childrenEntries.slice(start, end);
-            const newElements = [];
-            const parentPos = parentNode.position();
-            const direction = nodeId.startsWith('Source') ? -1 : 1;
-            const sideClass = direction === -1 ? 'source-side' : 'content-side';
-            const horizontalDist = 120;
-            const verticalSpacing = 40;
-
-            pageEntries.forEach(([key, value], index) => {
-                const displayKey = Array.isArray(childrenData) ? `[${key}]` : key;
-                const childPath = Array.isArray(childrenData) ? `${nodeId}[${start + index}]` : `${nodeId}.${key}`;
-                const isNode = value !== null && typeof value === 'object';
-                const hasChildren = isNode && Object.keys(value).length > 0;
-                
-                const yOffset = (index - (pageEntries.length - 1) / 2) * verticalSpacing;
-                const childPos = { x: parentPos.x + (horizontalDist * direction), y: parentPos.y + yOffset };
-                
-                let nodeData = { id: childPath };
-                let nodeClasses = sideClass;
-
-                if (isNode) {
-                    nodeData.label = displayKey;
-                    nodeData.hasChildren = hasChildren;
-                    nodeClasses += ' key-node';
-                } else {
-                    let label = String(value);
-                    if (label.length > 40) label = label.substring(0, 37) + '...';
-                    nodeData.label = `${displayKey}: ${label}`;
-                    nodeData.fullValue = String(value);
-                    nodeData.hasChildren = false;
-                    nodeClasses += ' leaf-node';
-                }
-                newElements.push({ group: 'nodes', data: nodeData, classes: nodeClasses, position: childPos });
-                newElements.push({ group: 'edges', data: { source: nodeId, target: childPath } });
-            });
-
-            // "More"-Button hinzufügen, wenn nötig
-            if (end < childrenEntries.length) {
-                const lastChildPos = newElements[newElements.length - 2].position; // Position des letzten echten Knotens
-                const moreNodePos = { x: lastChildPos.x, y: lastChildPos.y + verticalSpacing };
-                newElements.push({
-                    group: 'nodes',
-                    data: { id: `more-${nodeId}-${page}`, label: `[ ... mehr ]`, parentId: nodeId },
-                    classes: `more-node ${sideClass}`,
-                    position: moreNodePos
-                });
-            }
-
-            if (newElements.length > 0) {
-                cyInstance.add(newElements);
-                applyCytoTheme(); // Theme auf neue Knoten anwenden
-                parentNode.data('page', page + 1); // Seitenzahl für nächsten Klick erhöhen
-                parentNode.data('isExpanded', true).addClass('expanded');
-                cyInstance.animate({ fit: { eles: cyInstance.elements(), padding: 50 }, duration: 1000 });
-            }
-        };
-
-        cyInstance.on('tap', 'node[?hasChildren]', (evt) => {
-            const node = evt.target;
-            if (node.data('isExpanded')) {
-                // Nur die direkten Kinder entfernen, die von diesem Knoten ausgehen
-                const childrenToRemove = node.outgoers().nodes();
-                cyInstance.remove(childrenToRemove);
-                node.data('isExpanded', false).removeClass('expanded');
-                node.data('page', 0); // Paginierung zurücksetzen
-            } else {
-                expandPage(node);
-            }
-        });
-        
-        // Eigener Handler für "More"-Knoten
-        cyInstance.on('tap', 'node.more-node', (evt) => {
-            const moreNode = evt.target;
-            const parentNode = cyInstance.getElementById(moreNode.data('parentId'));
-            moreNode.remove();
-            expandPage(parentNode); // Nächste Seite laden
-        });
-
-        cyInstance.on('tap', 'node[!hasChildren]', (evt) => {
-            const node = evt.target;
-            if (node.data('fullValue')) {
-                showTooltip(evt.originalEvent, node.data('fullValue'));
-                evt.stopPropagation();
-            }
-        });
-        
-        cyInstance.on('mouseover', 'node', (e) => {
-            const node = e.target;
-            if (node.data('hasChildren') || node.data('fullValue') || node.hasClass('more-node')) {
-                cytoView.style.cursor = 'pointer';
-            }
-        });
-        cyInstance.on('mouseout', 'node', () => {
-            cytoView.style.cursor = 'grab';
-        });
-        cyInstance.on('mousedown', () => cytoView.classList.add('grabbing'));
-        cyInstance.on('mouseup', () => cytoView.classList.remove('grabbing'));
-    }
 
     searchInput.addEventListener('input', () => performSearch(searchInput.value));
     searchInKeys.addEventListener('input', () => performSearch(searchInput.value));
@@ -642,6 +434,7 @@
       hideTooltip(); 
     });
 
+    // Initial load of recent items on page start
     renderRecentItems();
   </script>
 </body>

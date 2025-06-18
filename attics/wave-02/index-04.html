@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="de" data-bs-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <title>fosseam-explorer-template</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <script id="fosseam-config">
+    window.FOSSEAM_CONFIG = {
+      title: "fosseam-explorer-template",
+      mode: "auto",
+      fieldMap: {},
+      autoload: false
+    };
+  </script>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { margin: 0; font-family: 'Fira Sans Condensed', sans-serif; }
+    .header-bar {
+      position: sticky; top: 0;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.75rem 1rem;
+      backdrop-filter: blur(6px);
+      background: rgba(255,255,255,0.5); /* CHANGE: Transparency to 50% */
+      z-index: 100;
+    }
+    html[data-bs-theme="dark"] .header-bar {
+      background: rgba(33,37,41,0.5); /* CHANGE: Transparency to 50% */
+    }
+    .dropdown-menu { min-width: 8rem; }
+    .dropdown-item.active { background-color: var(--bs-primary); color: var(--bs-light); }
+    .container-scroll {
+      height: calc(100vh - 3.5rem);
+      overflow-y: auto;
+    }
+    #raw-view, #structure-view { white-space: pre-wrap; font-family: monospace; }
+    html[data-bs-theme="light"] .label { color: #0052cc; }
+    html[data-bs-theme="dark"] .label  { color: #ffa500; }
+    .tree-list { list-style: none; padding: 0; margin: 0; }
+    .tree-item { margin: 0.2em 0; }
+    .node-content { display: flex; align-items: center; cursor: pointer; }
+    .expand-icon { width: 1em; margin-right: 0.5em; user-select: none; }
+    .type-icon { display: inline-flex; align-items: center; justify-content: center;
+      width: 1.2em; height: 1.2em; margin-right: 0.5em; font-size: 0.9em; }
+    .value { margin-left: 0.25em; max-width: 40ch;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+    .child-list { list-style: none; padding-left: 1.6em; margin: 0; display: none; }
+    .expanded > .child-list { display: block; }
+    /* Tooltip window centered */
+    .json-tooltip {
+      position: fixed;
+      top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: auto; max-width: 60ch; max-height: 60vh;
+      overflow-y: auto;
+      background: var(--bs-body-color);
+      color: var(--bs-body-bg);
+      border: 1px solid var(--bs-border-color);
+      padding: 0.5rem;
+      border-radius: 0.25rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      white-space: pre-wrap;
+      word-break: break-word;
+      z-index: 200;
+      display: none;
+    }
+  </style>
+</head>
+<body class="bg-body text-body">
+  <div class="header-bar container-fluid">
+    <div class="d-flex align-items-center">
+      <div class="dropdown">
+        <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">☰</button>
+        <ul class="dropdown-menu">
+          <li class="dropdown-header">Import</li>
+          <li><a class="dropdown-item" href="#" id="import-file">Per Datei laden…</a></li>
+          <li><a class="dropdown-item" href="#" id="import-url">Per URL laden…</a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li class="dropdown-header">View</li>
+          <li><a class="dropdown-item" href="#" id="view-raw">Raw-View</a></li>
+          <li><a class="dropdown-item active" href="#" id="view-tree">Tree-View</a></li>
+          <li><a class="dropdown-item disabled" href="#" id="view-document">Document</a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li class="dropdown-header">Export</li>
+          <li><a class="dropdown-item" href="#" id="export-csv">CSV</a></li>
+          <li><a class="dropdown-item" href="#" id="export-json">JSON</a></li>
+          <li><a class="dropdown-item" href="#" id="export-md">Markdown</a></li>
+        </ul>
+      </div>
+      <button class="btn btn-outline-secondary d-none ms-2" id="toggle-all-btn" title="Alles auf-/zuklappen">▶️</button>
+    </div>
+    <h1 class="h5 m-0">fosseam-explorer-template</h1>
+    <button class="btn btn-secondary" id="themeToggle">🌙 / ☀️</button>
+  </div>
+  <div class="container-scroll">
+    <div class="container py-4">
+      <div id="main-alert" class="alert alert-warning">Bitte JSON-Datei oder URL laden</div>
+      <div id="raw-view" class="d-none"></div>
+      <div id="structure-view" class="d-none"></div>
+    </div>
+  </div>
+
+  <!-- Tooltip element -->
+  <div id="jsonTooltip" class="json-tooltip"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const htmlEl = document.documentElement;
+    let jsonData = null;
+    let currentFile = null;
+    const tooltip = document.getElementById('jsonTooltip');
+    const toggleAllBtn = document.getElementById('toggle-all-btn');
+
+    function setTheme(mode) {
+      htmlEl.setAttribute('data-bs-theme', mode);
+      localStorage.setItem('theme', mode);
+    }
+    document.getElementById('themeToggle').addEventListener('click', () => {
+      setTheme(htmlEl.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark');
+    });
+    if (localStorage.getItem('theme')) setTheme(localStorage.getItem('theme'));
+
+    function clearActiveViews() {
+      ['view-raw','view-tree','view-document'].forEach(id => document.getElementById(id).classList.remove('active'));
+    }
+
+    const iconMap = { object: '📂', array: '📁', string: '🆎', number: '🔢', boolean: '☑️', null: '⛔' };
+
+    function showTooltip(evt, text) {
+      tooltip.textContent = text;
+      tooltip.style.display = 'block';
+    }
+    function hideTooltip() {
+      tooltip.style.display = 'none';
+    }
+
+    // Formatierung von Bytes
+    function formatBytes(bytes) {
+      const units = ['B','KB','MB','GB','TB'];
+      let i = 0;
+      while (bytes >= 1024 && i < units.length - 1) {
+        bytes /= 1024;
+        i++;
+      }
+      return `${bytes.toFixed(1)} ${units[i]}`;
+    }
+
+    // Zählfunktion für JSON-Statistiken
+    function countJson(obj, stats = { totalNodes:0, leaves:0, strings:0, numbers:0, booleans:0, nulls:0, arrays:0, objects:0 }) {
+      stats.totalNodes++;
+      if (obj === null) {
+        stats.leaves++; stats.nulls++;
+      } else if (Array.isArray(obj)) {
+        stats.arrays++;
+        obj.forEach(item => countJson(item, stats));
+      } else if (typeof obj === 'object') {
+        stats.objects++;
+        Object.values(obj).forEach(val => countJson(val, stats));
+      } else {
+        stats.leaves++;
+        if (typeof obj === 'string')      stats.strings++;
+        else if (typeof obj === 'number') stats.numbers++;
+        else if (typeof obj === 'boolean')stats.booleans++;
+      }
+      return stats;
+    }
+
+    // Datei-Import Handler
+    document.getElementById('import-file').addEventListener('click', () => {
+      const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json';
+      inp.onchange = e => {
+        const file = e.target.files[0];
+        file.text().then(txt => loadJson(txt, file));
+      };
+      inp.click();
+    });
+    document.getElementById('import-url').addEventListener('click', () => {
+      const url = prompt('Bitte JSON-Datei-URL eingeben');
+      if (url) fetch(url).then(res => res.text()).then(txt => {
+        currentFile = { name: url, size: txt.length, lastModified: Date.now() }; 
+        loadJson(txt, currentFile);
+      }).catch(() => alert('Fehler beim Laden')); 
+    });
+
+    function createTreeItem(key, value) {
+      const li = document.createElement('li'); li.className = 'tree-item';
+      const isArray = Array.isArray(value);
+      const isObject = value !== null && typeof value === 'object' && !isArray;
+      const isEmptyArray = isArray && value.length === 0;
+      const isEmptyObject = isObject && Object.keys(value).length === 0;
+      const isNode = (isArray && value.length > 0) || (isObject && Object.keys(value).length > 0);
+      const header = document.createElement('div'); header.className = 'node-content';
+
+      const expandIcon = document.createElement('span'); expandIcon.className = 'expand-icon';
+      // Default symbols
+      let expandSymbol = isNode ? '▶️' : '⏺️';
+      let type;
+      if (isEmptyArray) type = 'array';
+      else if (isEmptyObject) type = 'object';
+      else if (value === null) type = 'null';
+      else if (isArray) type = 'array';
+      else if (isObject) type = 'object';
+      else type = typeof value;
+      const typeIcon = document.createElement('span'); typeIcon.className = 'type-icon';
+      let typeSymbol = iconMap[type] || '';
+      // Override for Source node
+      if (key === 'Source') {
+        expandSymbol = '🔣';
+        typeSymbol = '🟢';
+      }
+      expandIcon.textContent = expandSymbol;
+      typeIcon.textContent = typeSymbol;
+
+      const labelSpan = document.createElement('span'); labelSpan.className = 'label';
+      labelSpan.textContent = key != null ? key : '';
+      header.append(expandIcon, typeIcon, labelSpan);
+
+      if (!isNode) {
+        const valSpan = document.createElement('span'); valSpan.className = 'value';
+        const displayText = (isEmptyArray || isEmptyObject || value === null) ? '⛔' : String(value);
+        valSpan.textContent = displayText;
+        valSpan.addEventListener('click', evt => {evt.stopPropagation(); showTooltip(evt, String(value));});
+        header.append(valSpan);
+      }
+      li.append(header);
+
+      if (isNode) {
+        const childList = document.createElement('ul'); childList.className = 'child-list';
+        if (isArray) value.forEach((v,i) => childList.append(createTreeItem(i, v)));
+        else Object.entries(value).forEach(([k,v]) => childList.append(createTreeItem(k, v)));
+        li.append(childList);
+        header.addEventListener('click', () => { expandIcon.textContent = expandIcon.textContent === '🔽' ? '▶️' : '🔽'; li.classList.toggle('expanded'); hideTooltip(); });
+      }
+      return li;
+    }
+
+    function renderTree(data) {
+      const container = document.getElementById('structure-view'); container.innerHTML = '';
+      const stats = countJson(data);
+      const countObj = {
+        'total-Nodes': stats.totalNodes,
+        'total-Leaves': stats.leaves,
+        'Objects': stats.objects,
+        'Arrays': stats.arrays,
+        'Strings': stats.strings,
+        'Numbers': stats.numbers,
+        'Booleans': stats.booleans,
+        'Nulls': stats.nulls
+      };
+      const fileObj = {
+        'Name': currentFile.name,
+        'Size': formatBytes(currentFile.size),
+        'Modified': new Date(currentFile.lastModified).toLocaleString()
+      };
+      const wrapper = {
+        'Source': Object.assign({}, fileObj, { 'Count': countObj }),
+        'Content': data // CHANGE: "JSON-Content" to "Content"
+      };
+
+      const rootUl = document.createElement('ul'); rootUl.className = 'tree-list';
+      Object.entries(wrapper).forEach(([k,v]) => rootUl.append(createTreeItem(k, v)));
+      container.append(rootUl); container.classList.remove('d-none');
+    }
+
+    function loadJson(txt, file) {
+      try {
+        jsonData = JSON.parse(txt);
+        currentFile = file;
+        document.getElementById('main-alert').classList.add('d-none');
+        document.getElementById('raw-view').classList.add('d-none');
+        document.getElementById('structure-view').classList.add('d-none');
+        toggleAllBtn.classList.remove('d-none');
+        toggleAllBtn.textContent = '▶️';
+        document.getElementById('view-tree').dispatchEvent(new Event('click'));
+      } catch {
+        alert('Fehler beim Parsen der JSON-Datei');
+      }
+    }
+
+    document.addEventListener('click', hideTooltip);
+    document.getElementById('view-raw').addEventListener('click', () => {
+      if (!jsonData) return alert('Keine Daten geladen'); clearActiveViews(); document.getElementById('view-raw').classList.add('active'); document.getElementById('structure-view').classList.add('d-none'); hideTooltip(); const rv = document.getElementById('raw-view'); rv.textContent = JSON.stringify(jsonData,null,2); rv.classList.remove('d-none');
+    });
+    document.getElementById('view-tree').addEventListener('click', () => {
+      if (!jsonData) return alert('Keine Daten geladen'); clearActiveViews(); document.getElementById('view-tree').classList.add('active'); document.getElementById('raw-view').classList.add('d-none'); renderTree(jsonData); hideTooltip();
+    });
+    document.getElementById('export-json').addEventListener('click', () => {
+      if (!jsonData) return alert('Keine Daten zum Export'); const blob = new Blob([JSON.stringify(jsonData,null,2)],{type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'export.json'; a.click(); URL.revokeObjectURL(url);
+    });
+    document.getElementById('export-md').addEventListener('click', () => {
+      if (!jsonData) return alert('Keine Daten zum Export'); const md = `\`\`\`json\n${JSON.stringify(jsonData,null,2)}\n\`\`\``; const blob = new Blob([md],{type:'text/markdown'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'export.md'; a.click(); URL.revokeObjectURL(url);
+    });
+    document.getElementById('export-csv').addEventListener('click', () => { if (!jsonData) return alert('Keine Daten zum Export'); alert('CSV-Export noch nicht verfügbar'); });
+
+    toggleAllBtn.addEventListener('click', () => {
+      const shouldExpand = toggleAllBtn.textContent === '▶️';
+      
+      // CHANGE: Only select the content part (the second child of the root list)
+      const contentRoot = document.querySelector('#structure-view .tree-list > .tree-item:nth-child(2)');
+      if (!contentRoot) return;
+      
+      const expandableItems = contentRoot.querySelectorAll('.tree-item');
+
+      expandableItems.forEach(item => {
+        const expandIcon = item.querySelector('.expand-icon');
+        const childList = item.querySelector('.child-list');
+
+        if (childList) {
+          if (shouldExpand) {
+            item.classList.add('expanded');
+            expandIcon.textContent = '🔽';
+          } else {
+            item.classList.remove('expanded');
+            expandIcon.textContent = '▶️';
+          }
+        }
+      });
+      toggleAllBtn.textContent = shouldExpand ? '🔽' : '▶️';
+      hideTooltip();
+    });
+  </script>
+</body>
+</html>
